@@ -1,0 +1,44 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  imageName: 'springboot-app'
+
+stages:
+  - stage: Build
+    jobs:
+    - job: Build
+      steps:
+      - task: Maven@3
+        inputs:
+          mavenPomFile: 'pom.xml'
+          goals: 'package'
+
+      - task: Docker@2
+        inputs:
+          containerRegistry: 'your-acr-service-connection'
+          repository: 'youracr.azurecr.io/$(imageName)'
+          command: 'buildAndPush'
+          Dockerfile: 'docker/Dockerfile'
+
+  - stage: Deploy
+    dependsOn: Build
+    jobs:
+    - job: HelmDeploy
+      steps:
+      - task: HelmInstaller@1
+        inputs:
+          helmVersionToInstall: 'latest'
+
+      - task: HelmDeploy@0
+        inputs:
+          connectionType: 'Kubernetes Service Connection'
+          kubernetesServiceEndpoint: 'your-aks-service-connection'
+          command: 'upgrade'
+          chartType: 'FilePath'
+          chartPath: 'charts/springboot-app'
+          releaseName: 'springboot-app'
+          overrideValues: 'image.tag=$(Build.BuildId)'
